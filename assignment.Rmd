@@ -1,0 +1,84 @@
+---
+title: "Practical Machine Learning Assignment"
+output: html_document
+author: jo stichbury
+---
+
+This is my writeup for the prediction assignment portion of the Practical Machine Learning course by Coursera/JHU. You can find the knitted HTML published online here: http://rpubs.com/stichbury/pml-assignment-writeup
+
+The assignment instructions state:
+
+"You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases".
+
+## How I built the model
+
+See the R code below. I used the caret library and read in the training data, then examined it. There were 160 variables, but the first 7 were meaningless in the context of this exercise, so I stripped those, and also any containing NA values. The remaining data (cleanData) contained 53 variables and 19622 observations. It was then split into a 75% training set and a 25% set to evaluate the quality of the model. I opted for a generic random forest approach, because of its accuracy, and used the classe variable as the dependent and remaining 52 variables (sensor data) as predictors
+
+```{r eval=FALSE}
+library(caret)
+set.seed(25)
+
+rawData <- read.csv("pml-training.csv", na.strings=c("NA",""), strip.white=T)
+str(rawData) #160 columns of 19,622 observations
+
+#Get rid of NA, and first 7 columns (not useful)
+keep <- colnames(rawData[colSums(is.na(rawData)) == 0])[-(1:7)]
+cleanData <- rawData[keep]
+str(cleanData) # Reduced down to 53 columns
+
+#Now partition into a training set and a testing set (so we can observe and tune the accuracy of our model, then later use it on the true test set)
+ids <- createDataPartition(y=cleanData$classe, p=0.75, list=FALSE )
+training <- cleanData[ids,] #14,718 observations
+testing <- cleanData[-ids,] #4904 observations
+
+#Use a Random Forest approach
+modfit <- train(classe~ .,data=training, method="rf")
+modfit
+#Random Forest 
+#14718 samples
+#   52 predictor
+#    5 classes: 'A', 'B', 'C', 'D', 'E' 
+
+#No pre-processing
+#Resampling: Bootstrapped (25 reps) 
+#Summary of sample sizes: 14718, 14718, 14718, 14718, 14718, 14718, ... 
+#Resampling results across tuning parameters:
+
+#  mtry  Accuracy   Kappa      Accuracy SD  Kappa SD   
+#   2    0.9891788  0.9863076  0.001379975  0.001745430
+#  27    0.9885055  0.9854560  0.001679496  0.002122124
+#  52    0.9810032  0.9759622  0.004022036  0.005090886
+
+#Accuracy was used to select the optimal model using  the largest value.
+#The final value used for the model was mtry = 2.
+
+pred <- predict(modfit, testing)
+table(pred, testing$classe)
+#pred    A    B    C    D    E
+#A 1395    3    0    0    0
+#B    0  946    2    0    0
+#C    0    0  852    9    0
+#D    0    0    1  795    1
+#E    0    0    0    0  900
+
+```
+
+## How I used cross validation
+I used the default caret package parameters, resulting in a 25 rep bootstrap resampling.
+
+## What is the expected out of sample error?
+The expected accuracy is 98.9%.
+
+## Why did I make these choices?
+I got lucky in that I tried this first, and it worked well. I selected it first because I knew it was a popular and accurate model. However, it did take several hours to run on my setup, and I could probably have improved efficiency by using a smaller sample and selecting on a subset of the sensor data.
+
+## Did my prediction model work?
+```{r eval=FALSE}
+#Let's try with the true testing set
+testData <- read.csv("pml-testing.csv", na.strings=c("NA",""), strip.white=T)
+cleanTestData <- testData[keep[-(53)]] #Clean up as we did for the training data (without classe, obviously)
+predict(modfit, cleanTestData)
+#B A B A A E D B A A B C B A E E A B B B
+```
+
+Submitting these to the auto marker returned 100% success, so yes, the model did work.
